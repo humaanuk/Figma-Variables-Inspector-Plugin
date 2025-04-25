@@ -34,3 +34,6 @@ MIT
 2. Works with Collections, Modes and Variables
 3. Issue with renaming Mode 1 (default mode) meant that we now create additional modes and then remove the original mode. Not sure if this will affect our limit on 4 Modes per collection. i.e. If it only gets deleted after creating the other modes then will 4 supplied modes fail as the last one will be out of range?
 4. Updated to work with aliased values from other Collections
+
+## Notes
+- **Mode 1** is created by default by Figma, so even if it's not used in a file, you will still need to reference it via that value is you are aliasing a variable from another collection

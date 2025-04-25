@@ -1,0 +1,183 @@
+{
+    "collections": [
+      {
+        "name": "Base Colors",
+        "modes": [
+          {
+            "name": "Light",
+            "variables": [
+              {
+                "name": "Primary Color",
+                "type": "COLOR",
+                "value": "#18A0FB"
+              },
+              {
+                "name": "Secondary Color",
+                "type": "COLOR",
+                "value": "#0D8DE3"
+              },
+              {
+                "name": "Text Size",
+                "type": "FLOAT",
+                "value": 16
+              }
+            ]
+          },
+          {
+            "name": "Dark",
+            "variables": [
+              {
+                "name": "Primary Color",
+                "type": "COLOR",
+                "value": "#0D8DE3"
+              },
+              {
+                "name": "Secondary Color",
+                "type": "COLOR",
+                "value": "#18A0FB"
+              },
+              {
+                "name": "Text Size",
+                "type": "FLOAT",
+                "value": 16
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Alias Tokens",
+        "modes": [
+          {
+            "name": "Light",
+            "variables": [
+              {
+                "name": "Button Background",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Light",
+                  "variable": "Primary Color"
+                }
+              },
+              {
+                "name": "Button Text",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Light",
+                  "variable": "Secondary Color"
+                }
+              },
+              {
+                "name": "Button Text Size",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Light",
+                  "variable": "Text Size"
+                }
+              }
+            ]
+          },
+          {
+            "name": "Dark",
+            "variables": [
+              {
+                "name": "Button Background",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Dark",
+                  "variable": "Primary Color"
+                }
+              },
+              {
+                "name": "Button Text",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Dark",
+                  "variable": "Secondary Color"
+                }
+              },
+              {
+                "name": "Button Text Size",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "Base Colors",
+                  "mode": "Dark",
+                  "variable": "Text Size"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Responsive",
+        "modes": [
+          {
+            "name": "Desktop",
+            "variables": [
+              {
+                "name": "Container Width",
+                "type": "FLOAT",
+                "value": 1200
+              },
+              {
+                "name": "Spacing",
+                "type": "FLOAT",
+                "value": 24
+              },
+              {
+                "name": "Border Radius",
+                "type": "FLOAT",
+                "value": 8
+              }
+            ]
+          },
+          {
+            "name": "Tablet",
+            "variables": [
+              {
+                "name": "Container Width",
+                "type": "FLOAT",
+                "value": 768
+              },
+              {
+                "name": "Spacing",
+                "type": "FLOAT",
+                "value": 16
+              },
+              {
+                "name": "Border Radius",
+                "type": "FLOAT",
+                "value": 6
+              }
+            ]
+          },
+          {
+            "name": "Mobile",
+            "variables": [
+              {
+                "name": "Container Width",
+                "type": "FLOAT",
+                "value": 375
+              },
+              {
+                "name": "Spacing",
+                "type": "FLOAT",
+                "value": 12
+              },
+              {
+                "name": "Border Radius",
+                "type": "FLOAT",
+                "value": 4
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
