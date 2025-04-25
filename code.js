@@ -405,8 +405,124 @@ async function createVariablesFromJSON(jsonData) {
   }
 }
 
+// Function to convert RGB to hex
+function rgbToHex(r, g, b) {
+  const toHex = (n) => {
+    const hex = Math.round(n * 255).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// Function to convert variables to template format
+function convertVariablesToTemplate() {
+  console.log('Starting variable conversion');
+  const collections = figma.variables.getLocalVariableCollections();
+  console.log('Found collections:', collections.length);
+  
+  const templateData = {
+    collections: []
+  };
+
+  for (const collection of collections) {
+    console.log('Processing collection:', collection.name);
+    console.log('Collection modes:', collection.modes.map(m => m.name));
+    console.log('Collection variables:', collection.variableIds.length);
+    
+    const collectionData = {
+      name: collection.name,
+      modes: []
+    };
+
+    for (const mode of collection.modes) {
+      console.log('Processing mode:', mode.name);
+      console.log('Mode ID:', mode.modeId);
+      
+      const modeData = {
+        name: mode.name,
+        variables: []
+      };
+
+      for (const varId of collection.variableIds) {
+        const variable = figma.variables.getVariableById(varId);
+        console.log('Processing variable:', variable.name);
+        console.log('Variable type:', variable.resolvedType);
+        console.log('Variable values by mode:', variable.valuesByMode);
+        
+        const value = variable.valuesByMode[mode.modeId];
+        console.log('Value for mode:', value);
+        
+        if (value === undefined) {
+          console.log('Skipping undefined value for variable:', variable.name);
+          continue;
+        }
+
+        const variableData = {
+          name: variable.name,
+          type: variable.resolvedType,
+          value: value
+        };
+
+        // Handle alias type
+        if (value.type === 'VARIABLE_ALIAS') {
+          console.log('Processing alias variable:', variable.name);
+          console.log('Alias value:', value);
+          
+          const aliasVariable = figma.variables.getVariableById(value.id);
+          console.log('Alias variable found:', aliasVariable ? aliasVariable.name : 'not found');
+          
+          const aliasCollection = collections.find(c => c.variableIds.includes(value.id));
+          console.log('Alias collection found:', aliasCollection ? aliasCollection.name : 'not found');
+          
+          // Find the mode where this alias is defined
+          let aliasMode = null;
+          for (const m of aliasCollection.modes) {
+            const modeValue = aliasVariable.valuesByMode[m.modeId];
+            console.log('Checking mode:', m.name, 'value:', modeValue);
+            // Check if this is the mode where the alias is defined
+            if (modeValue && modeValue.type === 'VARIABLE_ALIAS' && modeValue.id === value.id) {
+              aliasMode = m;
+              break;
+            }
+          }
+
+          if (!aliasMode) {
+            // If we can't find the exact mode, use the first mode as a fallback
+            console.log('Using first mode as fallback for variable:', variable.name);
+            aliasMode = aliasCollection.modes[0];
+          }
+
+          variableData.type = 'ALIAS';
+          variableData.value = {
+            collection: aliasCollection.name,
+            mode: aliasMode.name,
+            variable: aliasVariable.name
+          };
+        } else if (variable.resolvedType === 'COLOR') {
+          // Convert RGB to hex for color values
+          variableData.value = rgbToHex(value.r, value.g, value.b);
+        }
+
+        modeData.variables.push(variableData);
+        console.log('Added variable to mode:', variable.name);
+      }
+
+      collectionData.modes.push(modeData);
+      console.log('Mode variables count:', modeData.variables.length);
+    }
+
+    templateData.collections.push(collectionData);
+    console.log('Collection complete:', collection.name);
+  }
+
+  console.log('Finished converting variables');
+  return templateData;
+}
+
 // Listen for messages from the UI
 figma.ui.onmessage = async msg => {
+  console.log('Received message:', msg.type);
+  
   if (msg.type === 'get-collections') {
     const collections = getAllVariableCollections();
     figma.ui.postMessage({ 
@@ -418,6 +534,23 @@ figma.ui.onmessage = async msg => {
       type: 'template-data', 
       data: JSON.stringify(templateData, null, 2)
     });
+  } else if (msg.type === 'export-variables') {
+    console.log('Starting export process');
+    try {
+      const exportData = convertVariablesToTemplate();
+      console.log('Export data created:', exportData);
+      figma.ui.postMessage({ 
+        type: 'export-data', 
+        data: JSON.stringify(exportData, null, 2)
+      });
+      console.log('Export data sent to UI');
+    } catch (error) {
+      console.error('Export error:', error);
+      figma.ui.postMessage({ 
+        type: 'import-error', 
+        error: error.message 
+      });
+    }
   } else if (msg.type === 'create-variables') {
     try {
       await createVariablesFromJSON(msg.data);
