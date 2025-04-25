@@ -49,6 +49,75 @@ const templateData = {
       ]
     },
     {
+      "name": "Alias Tokens",
+      "modes": [
+        {
+          "name": "Light",
+          "variables": [
+            {
+              "name": "Button Background",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Light",
+                "variable": "Primary Color"
+              }
+            },
+            {
+              "name": "Button Text",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Light",
+                "variable": "Secondary Color"
+              }
+            },
+            {
+              "name": "Button Text Size",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Light",
+                "variable": "Text Size"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dark",
+          "variables": [
+            {
+              "name": "Button Background",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Dark",
+                "variable": "Primary Color"
+              }
+            },
+            {
+              "name": "Button Text",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Dark",
+                "variable": "Secondary Color"
+              }
+            },
+            {
+              "name": "Button Text Size",
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Dark",
+                "variable": "Text Size"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Responsive",
       "modes": [
         {
@@ -126,6 +195,17 @@ function getAllVariableCollections() {
   }));
 }
 
+// Function to find a variable by name in a collection
+function findVariableInCollection(collection, variableName) {
+  for (const varId of collection.variableIds) {
+    const variable = figma.variables.getVariableById(varId);
+    if (variable.name === variableName) {
+      return variable;
+    }
+  }
+  return null;
+}
+
 // Function to create variables from JSON
 async function createVariablesFromJSON(jsonData) {
   try {
@@ -135,6 +215,8 @@ async function createVariablesFromJSON(jsonData) {
       throw new Error('Invalid format: collections array is required');
     }
 
+    // First pass: Create all collections and modes
+    const collections = {};
     for (const collection of data.collections) {
       if (!collection.name || !collection.modes || !Array.isArray(collection.modes)) {
         throw new Error('Invalid collection format: name and modes array are required');
@@ -142,6 +224,7 @@ async function createVariablesFromJSON(jsonData) {
 
       // Create collection
       const newCollection = figma.variables.createVariableCollection(collection.name);
+      collections[collection.name] = newCollection;
       
       // Create all modes
       const modeIds = {};
@@ -167,8 +250,12 @@ async function createVariablesFromJSON(jsonData) {
         newCollection.removeMode(defaultMode.modeId);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+    }
 
-      // Create variables for each mode
+    // Second pass: Create variables and set values
+    for (const collection of data.collections) {
+      const newCollection = collections[collection.name];
+      
       for (const mode of collection.modes) {
         if (!mode.variables || !Array.isArray(mode.variables)) {
           throw new Error('Invalid mode format: variables array is required');
@@ -180,14 +267,7 @@ async function createVariablesFromJSON(jsonData) {
           }
 
           // Check if variable already exists
-          let existingVariable = null;
-          for (const varId of newCollection.variableIds) {
-            const currentVar = figma.variables.getVariableById(varId);
-            if (currentVar.name === variableData.name) {
-              existingVariable = currentVar;
-              break;
-            }
-          }
+          let existingVariable = findVariableInCollection(newCollection, variableData.name);
 
           // Create variable if it doesn't exist
           if (!existingVariable) {
@@ -205,6 +285,19 @@ async function createVariablesFromJSON(jsonData) {
               case 'BOOLEAN':
                 variableType = 'BOOLEAN';
                 break;
+              case 'ALIAS':
+                // For aliases, we need to determine the type based on the referenced variable
+                const { collection: refCollection, variable: refVariable } = variableData.value;
+                const targetCollection = collections[refCollection];
+                if (!targetCollection) {
+                  throw new Error(`Reference collection not found: ${refCollection}`);
+                }
+                const targetVariable = findVariableInCollection(targetCollection, refVariable);
+                if (!targetVariable) {
+                  throw new Error(`Reference variable not found: ${refVariable}`);
+                }
+                variableType = targetVariable.resolvedType;
+                break;
               default:
                 throw new Error(`Unsupported variable type: ${variableData.type}`);
             }
@@ -217,57 +310,90 @@ async function createVariablesFromJSON(jsonData) {
             await new Promise(resolve => setTimeout(resolve, 100));
           }
 
-          // Set value for this mode
-          let value;
-          switch (variableData.type.toUpperCase()) {
-            case 'COLOR':
-              const hex = variableData.value.replace('#', '');
-              value = {
-                r: parseInt(hex.substr(0, 2), 16) / 255,
-                g: parseInt(hex.substr(2, 2), 16) / 255,
-                b: parseInt(hex.substr(4, 2), 16) / 255
-              };
-              console.log(`Setting COLOR value for ${variableData.name}:`, {
-                original: variableData.value,
-                converted: value
-              });
-              break;
-            case 'FLOAT':
-              value = variableData.value;
-              console.log(`Setting FLOAT value for ${variableData.name}:`, value);
-              break;
-            case 'STRING':
-              value = variableData.value;
-              console.log(`Setting STRING value for ${variableData.name}:`, value);
-              break;
-            case 'BOOLEAN':
-              value = variableData.value;
-              console.log(`Setting BOOLEAN value for ${variableData.name}:`, value);
-              break;
-          }
-
-          // Get the current mode ID
+          // Get the current mode ID first
           const currentMode = newCollection.modes.find(m => m.name === mode.name);
           const currentModeId = currentMode ? currentMode.modeId : null;
           console.log('Mode assignment:', {
             variable: variableData.name,
             mode: mode.name,
-            modeId: currentModeId,
-            value: value
+            modeId: currentModeId
           });
           
           if (!currentModeId) {
             throw new Error(`Mode ID not found for mode: ${mode.name}`);
           }
 
-          // Set the value for this specific mode
-          try {
-            existingVariable.setValueForMode(currentModeId, value);
-            console.log(`Successfully set value for ${variableData.name} in mode ${mode.name}`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-          } catch (error) {
-            console.error(`Failed to set value for ${variableData.name} in mode ${mode.name}:`, error);
-            throw error;
+          // Set value for this mode
+          let value;
+          if (variableData.type.toUpperCase() === 'ALIAS') {
+            // Handle alias type
+            const { collection: refCollection, mode: refMode, variable: refVariable } = variableData.value;
+            const targetCollection = collections[refCollection];
+            if (!targetCollection) {
+              throw new Error(`Reference collection not found: ${refCollection}`);
+            }
+            
+            const targetVariable = findVariableInCollection(targetCollection, refVariable);
+            if (!targetVariable) {
+              throw new Error(`Reference variable not found: ${refVariable}`);
+            }
+
+            // Get the target mode ID
+            const targetMode = targetCollection.modes.find(m => m.name === refMode);
+            if (!targetMode) {
+              throw new Error(`Target mode not found: ${refMode}`);
+            }
+
+            // Set the alias value
+            try {
+              existingVariable.setValueForMode(currentModeId, {
+                type: 'VARIABLE_ALIAS',
+                id: targetVariable.id
+              });
+              console.log(`Successfully set alias for ${variableData.name} to ${refVariable} in mode ${mode.name}`);
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (error) {
+              console.error(`Failed to set alias for ${variableData.name}:`, error);
+              throw error;
+            }
+          } else {
+            // Handle regular types
+            switch (variableData.type.toUpperCase()) {
+              case 'COLOR':
+                const hex = variableData.value.replace('#', '');
+                value = {
+                  r: parseInt(hex.substr(0, 2), 16) / 255,
+                  g: parseInt(hex.substr(2, 2), 16) / 255,
+                  b: parseInt(hex.substr(4, 2), 16) / 255
+                };
+                console.log(`Setting COLOR value for ${variableData.name}:`, {
+                  original: variableData.value,
+                  converted: value
+                });
+                break;
+              case 'FLOAT':
+                value = variableData.value;
+                console.log(`Setting FLOAT value for ${variableData.name}:`, value);
+                break;
+              case 'STRING':
+                value = variableData.value;
+                console.log(`Setting STRING value for ${variableData.name}:`, value);
+                break;
+              case 'BOOLEAN':
+                value = variableData.value;
+                console.log(`Setting BOOLEAN value for ${variableData.name}:`, value);
+                break;
+            }
+
+            // Set the value for this specific mode
+            try {
+              existingVariable.setValueForMode(currentModeId, value);
+              console.log(`Successfully set value for ${variableData.name} in mode ${mode.name}`);
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (error) {
+              console.error(`Failed to set value for ${variableData.name} in mode ${mode.name}:`, error);
+              throw error;
+            }
           }
         }
       }
