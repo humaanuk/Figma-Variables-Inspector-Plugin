@@ -1,0 +1,60 @@
+{
+    "collections": [
+      {
+        "name": "brand",
+        "modes": [
+          {
+            "name": "Mode 1",
+            "variables": [
+              {
+                "name": "red-100",
+                "type": "COLOR",
+                "value": "#FF0000"
+              },
+              {
+                "name": "red-200",
+                "type": "COLOR",
+                "value": "#FF6666"
+              }
+            ]
+          }
+        ]
+      },
+      
+      {
+        "name": "semantic",
+        "modes": [
+          {
+            "name": "light",
+            "variables": [
+              {
+                "name": "color/error",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "brand",
+                  "mode": "Mode 1",
+                  "variable": "red-100"
+                }
+              }
+              
+            ]
+          },
+          {
+            "name": "dark",
+            "variables": [
+              {
+                "name": "color/error",
+                "type": "ALIAS",
+                "value": {
+                  "collection": "brand",
+                  "mode": "Mode 1",
+                  "variable": "red-200"
+                }
+              }
+              
+            ]
+          }
+        ]
+      }
+    ]
+  }
