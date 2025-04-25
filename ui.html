@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style>
+    body {
+      font-family: Inter, sans-serif;
+      padding: 20px;
+      color: #333;
+      font-size:14px;
+    }
+    h2{
+        font-size:16px;
+    }
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 14px;
+      color: #666;
+      position: relative;
+    }
+    .tab.active {
+      color: #18A0FB;
+      font-weight: 500;
+    }
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #18A0FB;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    button {
+      background-color: #18A0FB;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    button:hover {
+      background-color: #0D8DE3;
+    }
+    button.secondary {
+      background-color: #f5f5f5;
+      color: #333;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    button.secondary:hover {
+      background-color: #92c4e6;
+    }
+    .collection-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .collection-item {
+      background: #f5f5f5;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collection-name {
+      font-weight: 500;
+    }
+    .variable-count {
+      color: #666;
+      font-size: 0.9em;
+    }
+    .no-collections {
+      color: #666;
+      font-style: italic;
+    }
+    .import-section {
+      padding: 20px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      margin-top: 20px;
+    }
+    .import-section h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+    }
+    .json-input {
+      width: 100%;
+      height: 200px;
+      margin: 16px 0;
+      padding: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-family: monospace;
+      resize: vertical;
+    }
+    .error-message {
+      color: #ff4d4f;
+      margin-top: 8px;
+      display: none;
+    }
+    .success-message {
+      color: #52c41a;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Figma Variables Inspector</h2>
+  
+  <div class="tabs">
+    <button class="tab active" data-tab="export">Export</button>
+    <button class="tab" data-tab="import">Import</button>
+  </div>
+
+  <div id="export-tab" class="tab-content active">
+    <button id="refresh">Refresh Collections</button>
+    <div id="collections-container">
+      <ul class="collection-list" id="collections-list"></ul>
+    </div>
+  </div>
+
+  <div id="import-tab" class="tab-content">
+    <section>
+      <button class="secondary" id="download-template">Download Example Template</button>
+    </section>
+
+    <div class="import-section">
+      <h3>Create Variables from JSON</h3>
+      <p>Paste your JSON data below and click Create to import variables:</p>
+      <textarea id="json-input" class="json-input" placeholder="Paste your JSON here..."></textarea>
+      <button id="create-variables">Create Variables</button>
+      <div id="error-message" class="error-message"></div>
+      <div id="success-message" class="success-message"></div>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching functionality
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active class from all tabs and contents
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Add active class to clicked tab and corresponding content
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+      });
+    });
+
+    // Function to display collections
+    function displayCollections(collections) {
+      const list = document.getElementById('collections-list');
+      list.innerHTML = '';
+      
+      if (collections.length === 0) {
+        list.innerHTML = '<li class="no-collections">No variable collections found</li>';
+        return;
+      }
+
+      collections.forEach(collection => {
+        const li = document.createElement('li');
+        li.className = 'collection-item';
+        li.innerHTML = `
+          <span class="collection-name">${collection.name}</span>
+          <span class="variable-count">${collection.variableCount} variables</span>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    // Download template functionality
+    document.getElementById('download-template').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'download-template' } }, '*');
+    };
+
+    // Create variables functionality
+    document.getElementById('create-variables').onclick = () => {
+      const jsonInput = document.getElementById('json-input').value;
+      const errorMessage = document.getElementById('error-message');
+      const successMessage = document.getElementById('success-message');
+
+      try {
+        // Validate JSON
+        JSON.parse(jsonInput);
+        
+        // Send to plugin
+        parent.postMessage({ 
+          pluginMessage: { 
+            type: 'create-variables',
+            data: jsonInput
+          } 
+        }, '*');
+
+        // Clear error message if it was shown
+        errorMessage.style.display = 'none';
+      } catch (e) {
+        errorMessage.textContent = 'Invalid JSON format. Please check your input.';
+        errorMessage.style.display = 'block';
+        successMessage.style.display = 'none';
+      }
+    };
+
+    // Initial load
+    document.getElementById('refresh').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
+    };
+
+    // Listen for messages from the plugin
+    window.onmessage = (event) => {
+      const message = event.data.pluginMessage;
+      if (message.type === 'collections-data') {
+        displayCollections(message.collections);
+      } else if (message.type === 'template-data') {
+        // Create a blob and download the template
+        const blob = new Blob([message.data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'variables-template.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else if (message.type === 'import-success') {
+        const successMessage = document.getElementById('success-message');
+        successMessage.textContent = 'Variables created successfully!';
+        successMessage.style.display = 'block';
+        document.getElementById('error-message').style.display = 'none';
+        document.getElementById('json-input').value = '';
+      } else if (message.type === 'import-error') {
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.textContent = message.error;
+        errorMessage.style.display = 'block';
+        document.getElementById('success-message').style.display = 'none';
+      }
+    };
+
+    // Load collections on startup
+    parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
+  </script>
+</body>
+</html> 
