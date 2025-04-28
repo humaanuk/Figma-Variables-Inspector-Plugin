@@ -375,7 +375,7 @@
         li.innerHTML = `
           <span class="collection-name">
             <input type="checkbox" class="collection-checkbox" data-id="${collection.id}" checked>
-            ${collection.name}
+            <span class="collection-name-text">${collection.name}</span>
           </span>
           <span class="variable-count">${collection.variableCount} variables</span>
         `;
@@ -420,7 +420,7 @@
         // Send to plugin
         parent.postMessage({ 
           pluginMessage: { 
-            type: 'create-variables',
+            type: 'import-variables',
             data: jsonInput
           } 
         }, '*');
@@ -450,7 +450,7 @@
       const selectedCheckboxes = document.querySelectorAll('.collection-checkbox:checked');
       const selectedCollections = Array.from(selectedCheckboxes).map(checkbox => ({
         id: checkbox.dataset.id,
-        name: checkbox.closest('.collection-item').querySelector('.collection-name').textContent.trim()
+        name: checkbox.closest('.collection-item').querySelector('.collection-name-text').textContent.trim()
       }));
       
       console.log('Exporting selected collections:', selectedCollections);
@@ -514,7 +514,7 @@
     // Listen for messages from the plugin
     window.onmessage = (event) => {
       const message = event.data.pluginMessage;
-      if (message.type === 'collections-data') {
+      if (message.type === 'collections') {
         displayCollections(message.collections);
       } else if (message.type === 'export-data') {
         const exportContainer = document.getElementById('export-container');
@@ -532,7 +532,7 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      } else if (message.type === 'import-success') {
+      } else if (message.type === 'import-complete') {
         const successMessage = document.getElementById('success-message');
         successMessage.innerHTML = `
           <svg class="message-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -547,7 +547,7 @@
         successMessage.classList.add('show');
         document.getElementById('error-message').classList.remove('show');
         document.getElementById('json-input').value = '';
-      } else if (message.type === 'import-error') {
+      } else if (message.type === 'error') {
         const errorMessage = document.getElementById('error-message');
         errorMessage.innerHTML = `
           <svg class="message-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -562,15 +562,6 @@
           </svg>
         `;
         errorMessage.classList.add('show');
-        document.getElementById('success-message').classList.remove('show');
-      } else if (message.type === 'delete-success') {
-        alert('All collections have been deleted.');
-        document.getElementById('delete-confirm').value = '';
-        document.getElementById('delete-collections').disabled = true;
-        // Refresh the collections list
-        parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
-      } else if (message.type === 'delete-error') {
-        alert('Error deleting collections: ' + message.error);
       }
     };
 
