@@ -318,6 +318,23 @@ async function createVariablesFromJSON(jsonData) {
       }
     }
 
+    // Count total variables to be created
+    let totalVariables = 0;
+    const uniqueVariables = new Set();
+    for (const [collectionName, collection] of collectionsToCreate) {
+      for (const mode of collection.modes) {
+        for (const variable of mode.variables) {
+          // Create a unique key for each variable
+          const variableKey = `${collectionName}/${variable.name}`;
+          if (!uniqueVariables.has(variableKey)) {
+            uniqueVariables.add(variableKey);
+            totalVariables++;
+          }
+        }
+      }
+    }
+    console.log(`Found ${totalVariables} unique variables to create`);
+
     // First pass: Create all non-alias variables
     for (const [collectionName, collection] of collectionsToCreate) {
       console.log(`Starting to process collection: ${collectionName}`);
@@ -532,7 +549,7 @@ async function createVariablesFromJSON(jsonData) {
       }
     }
 
-    return true;
+    return { success: true, variableCount: totalVariables };
   } catch (error) {
     throw error;
   }
@@ -884,8 +901,11 @@ figma.ui.onmessage = async msg => {
     }
   } else if (msg.type === 'create-variables') {
     try {
-      await createVariablesFromJSON(msg.data);
-      figma.ui.postMessage({ type: 'import-success' });
+      const result = await createVariablesFromJSON(msg.data);
+      figma.ui.postMessage({ 
+        type: 'import-success',
+        variableCount: result.variableCount
+      });
     } catch (error) {
       figma.ui.postMessage({ 
         type: 'import-error', 
