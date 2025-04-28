@@ -84,6 +84,9 @@
     }
     .collection-name {
       font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .variable-count {
       color: #666;
@@ -92,6 +95,15 @@
     .no-collections {
       color: #666;
       font-style: italic;
+    }
+    .select-all-container {
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .select-all-container label {
+      font-weight: 500;
     }
     .import-section {
       padding: 20px;
@@ -123,6 +135,64 @@
       margin-top: 8px;
       display: none;
     }
+    .frame-creation-section {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .frame-creation-section h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .select-group {
+      margin-bottom: 12px;
+    }
+    .select-group label {
+      display: block;
+      margin-bottom: 4px;
+      color: #666;
+    }
+    .select-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      background-color: white;
+    }
+    .select-input:disabled {
+      background-color: #f5f5f5;
+      cursor: not-allowed;
+    }
+    .delete-section {
+      background: #fff1f0;
+      padding: 16px;
+      border-radius: 6px;
+      margin-top: 20px;
+      border: 1px solid #ffccc7;
+    }
+    .delete-section h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: #cf1322;
+    }
+    .warning-text {
+      color: #cf1322;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+    button.danger {
+      background-color: #ff4d4f;
+      color: white;
+    }
+    button.danger:hover {
+      background-color: #cf1322;
+    }
+    button.danger:disabled {
+      background-color: #ffccc7;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -131,6 +201,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="export">Export</button>
     <button class="tab" data-tab="import">Import</button>
+    <button class="tab" data-tab="create">Create Frame</button>
   </div>
 
   <div id="export-tab" class="tab-content active">
@@ -178,6 +249,35 @@
     </div>
   </div>
 
+  <div id="create-tab" class="tab-content">
+    <div class="frame-creation-section">
+      <h3>Create Frame with Mode</h3>
+      <div class="select-group">
+        <label for="collection-select">Collection:</label>
+        <select id="collection-select" class="select-input">
+          <option value="">Select a collection...</option>
+        </select>
+      </div>
+      <div class="select-group">
+        <label for="mode-select">Mode:</label>
+        <select id="mode-select" class="select-input" disabled>
+          <option value="">Select a mode...</option>
+        </select>
+      </div>
+      <button id="create-frame-with-mode" disabled>Create Frame</button>
+    </div>
+
+    <div class="delete-section">
+      <h3>Delete All Collections</h3>
+      <p class="warning-text">Warning: This action cannot be undone. All variable collections will be permanently deleted.</p>
+      <div class="select-group">
+        <label for="delete-confirm">Type DELETE to confirm:</label>
+        <input type="text" id="delete-confirm" class="select-input" placeholder="Type DELETE to confirm">
+      </div>
+      <button id="delete-collections" class="danger" disabled>Delete All Collections</button>
+    </div>
+  </div>
+
   <script>
     // Tab switching functionality
     const tabs = document.querySelectorAll('.tab');
@@ -200,7 +300,9 @@
     function displayCollections(collections) {
       const list = document.getElementById('collections-list');
       const exportButton = document.getElementById('export-variables');
+      const collectionSelect = document.getElementById('collection-select');
       list.innerHTML = '';
+      collectionSelect.innerHTML = '<option value="">Select a collection...</option>';
       
       if (collections.length === 0) {
         list.innerHTML = '<li class="no-collections">No variable collections found</li>';
@@ -208,16 +310,70 @@
         return;
       }
 
+      // Remove any existing select all container
+      const existingSelectAll = document.querySelector('.select-all-container');
+      if (existingSelectAll) {
+        existingSelectAll.remove();
+      }
+
+      // Add select all checkbox
+      const selectAllContainer = document.createElement('div');
+      selectAllContainer.className = 'select-all-container';
+      selectAllContainer.innerHTML = `
+        <input type="checkbox" id="select-all" checked>
+        <label for="select-all">Select All Collections</label>
+      `;
+      list.parentElement.insertBefore(selectAllContainer, list);
+
+      // Add select all handler
+      const selectAllCheckbox = document.getElementById('select-all');
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.collection-checkbox');
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = e.target.checked;
+        });
+        updateExportButton();
+      });
+
       exportButton.disabled = false;
       collections.forEach(collection => {
+        // Add to list
         const li = document.createElement('li');
         li.className = 'collection-item';
         li.innerHTML = `
-          <span class="collection-name">${collection.name}</span>
+          <span class="collection-name">
+            <input type="checkbox" class="collection-checkbox" data-id="${collection.id}" checked>
+            ${collection.name}
+          </span>
           <span class="variable-count">${collection.variableCount} variables</span>
         `;
         list.appendChild(li);
+
+        // Add to select
+        const option = document.createElement('option');
+        option.value = collection.id;
+        option.textContent = collection.name;
+        collectionSelect.appendChild(option);
       });
+
+      // Add change handlers for collection checkboxes
+      const checkboxes = document.querySelectorAll('.collection-checkbox');
+      checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+          updateExportButton();
+          // Update select all checkbox
+          const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+          selectAllCheckbox.checked = allChecked;
+        });
+      });
+    }
+
+    // Function to update export button state
+    function updateExportButton() {
+      const exportButton = document.getElementById('export-variables');
+      const checkboxes = document.querySelectorAll('.collection-checkbox');
+      const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+      exportButton.disabled = !anyChecked;
     }
 
     // Download template functionality
@@ -254,10 +410,17 @@
 
     // Export variables functionality
     document.getElementById('export-variables').onclick = () => {
-      console.log('Export button clicked');
+      const selectedCheckboxes = document.querySelectorAll('.collection-checkbox:checked');
+      const selectedCollections = Array.from(selectedCheckboxes).map(checkbox => ({
+        id: checkbox.dataset.id,
+        name: checkbox.closest('.collection-item').querySelector('.collection-name').textContent.trim()
+      }));
+      
+      console.log('Exporting selected collections:', selectedCollections);
       parent.postMessage({ 
         pluginMessage: { 
-          type: 'export-variables'
+          type: 'export-variables',
+          selectedCollections: selectedCollections
         } 
       }, '*');
     };
@@ -269,7 +432,14 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'variables-export.json';
+      
+      // Get the collection name from the data
+      const data = JSON.parse(jsonData);
+      const fileName = data.collections.length === 1 
+        ? `${data.collections[0].name}-variables.json`
+        : 'variables-export.json';
+      
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -285,6 +455,64 @@
     // Initial load
     document.getElementById('refresh').onclick = () => {
       parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
+    };
+
+    // Collection select change handler
+    document.getElementById('collection-select').addEventListener('change', (e) => {
+      const collectionId = e.target.value;
+      const modeSelect = document.getElementById('mode-select');
+      const createButton = document.getElementById('create-frame-with-mode');
+      
+      if (collectionId) {
+        // Request modes for selected collection
+        parent.postMessage({ 
+          pluginMessage: { 
+            type: 'get-collection-modes',
+            collectionId: collectionId
+          } 
+        }, '*');
+      } else {
+        modeSelect.innerHTML = '<option value="">Select a mode...</option>';
+        modeSelect.disabled = true;
+        createButton.disabled = true;
+      }
+    });
+
+    // Mode select change handler
+    document.getElementById('mode-select').addEventListener('change', (e) => {
+      const createButton = document.getElementById('create-frame-with-mode');
+      createButton.disabled = !e.target.value;
+    });
+
+    // Create frame with mode functionality
+    document.getElementById('create-frame-with-mode').onclick = () => {
+      const collectionId = document.getElementById('collection-select').value;
+      const modeId = document.getElementById('mode-select').value;
+      
+      parent.postMessage({ 
+        pluginMessage: { 
+          type: 'create-frame-with-mode',
+          collectionId: collectionId,
+          modeId: modeId
+        } 
+      }, '*');
+    };
+
+    // Delete confirmation handler
+    document.getElementById('delete-confirm').addEventListener('input', (e) => {
+      const deleteButton = document.getElementById('delete-collections');
+      deleteButton.disabled = e.target.value !== 'DELETE';
+    });
+
+    // Delete collections functionality
+    document.getElementById('delete-collections').onclick = () => {
+      if (confirm('Are you sure you want to delete all collections? This action cannot be undone.')) {
+        parent.postMessage({ 
+          pluginMessage: { 
+            type: 'delete-collections'
+          } 
+        }, '*');
+      }
     };
 
     // Listen for messages from the plugin
@@ -319,6 +547,30 @@
         errorMessage.textContent = message.error;
         errorMessage.style.display = 'block';
         document.getElementById('success-message').style.display = 'none';
+      } else if (message.type === 'frame-created') {
+        console.log('Frame created with ID:', message.frameId);
+      } else if (message.type === 'error') {
+        console.error('Error:', message.error);
+      } else if (message.type === 'collection-modes') {
+        const modeSelect = document.getElementById('mode-select');
+        modeSelect.innerHTML = '<option value="">Select a mode...</option>';
+        
+        message.modes.forEach(mode => {
+          const option = document.createElement('option');
+          option.value = mode.modeId;
+          option.textContent = mode.name;
+          modeSelect.appendChild(option);
+        });
+        
+        modeSelect.disabled = false;
+      } else if (message.type === 'delete-success') {
+        alert('All collections have been deleted.');
+        document.getElementById('delete-confirm').value = '';
+        document.getElementById('delete-collections').disabled = true;
+        // Refresh the collections list
+        parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
+      } else if (message.type === 'delete-error') {
+        alert('Error deleting collections: ' + message.error);
       }
     };
 
