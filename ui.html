@@ -17,7 +17,7 @@
       margin-bottom: 20px;
       border-bottom: 1px solid #e0e0e0;
     }
-    .tab {
+    button.tab {
       padding: 10px 20px;
       cursor: pointer;
       border: none;
@@ -26,11 +26,11 @@
       color: #666;
       position: relative;
     }
-    .tab.active {
+    button.tab.active {
       color: #18A0FB;
       font-weight: 500;
     }
-    .tab.active::after {
+    button.tab.active::after {
       content: '';
       position: absolute;
       bottom: -1px;
@@ -44,6 +44,11 @@
     }
     .tab-content.active {
       display: block;
+    }
+    button.tab:hover{
+        background-color: #f0f0f0;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
     }
     button {
       background-color: #18A0FB;
@@ -247,7 +252,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="export">Export</button>
     <button class="tab" data-tab="import">Import</button>
-    <button class="tab" data-tab="create">Create Frame</button>
+    <button class="tab" data-tab="special">Special</button>
   </div>
 
   <div id="export-tab" class="tab-content active">
@@ -295,24 +300,7 @@
     </div>
   </div>
 
-  <div id="create-tab" class="tab-content">
-    <div class="frame-creation-section">
-      <h3>Create Frame with Mode</h3>
-      <div class="select-group">
-        <label for="collection-select">Collection:</label>
-        <select id="collection-select" class="select-input">
-          <option value="">Select a collection...</option>
-        </select>
-      </div>
-      <div class="select-group">
-        <label for="mode-select">Mode:</label>
-        <select id="mode-select" class="select-input" disabled>
-          <option value="">Select a mode...</option>
-        </select>
-      </div>
-      <button id="create-frame-with-mode" disabled>Create Frame</button>
-    </div>
-
+  <div id="special-tab" class="tab-content">
     <div class="delete-section">
       <h3>Delete All Collections</h3>
       <p class="warning-text">Warning: This action cannot be undone. All variable collections will be permanently deleted.</p>
@@ -346,9 +334,7 @@
     function displayCollections(collections) {
       const list = document.getElementById('collections-list');
       const exportButton = document.getElementById('export-variables');
-      const collectionSelect = document.getElementById('collection-select');
       list.innerHTML = '';
-      collectionSelect.innerHTML = '<option value="">Select a collection...</option>';
       
       if (collections.length === 0) {
         list.innerHTML = '<li class="no-collections">No variable collections found</li>';
@@ -394,12 +380,6 @@
           <span class="variable-count">${collection.variableCount} variables</span>
         `;
         list.appendChild(li);
-
-        // Add to select
-        const option = document.createElement('option');
-        option.value = collection.id;
-        option.textContent = collection.name;
-        collectionSelect.appendChild(option);
       });
 
       // Add change handlers for collection checkboxes
@@ -514,47 +494,6 @@
       parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
     };
 
-    // Collection select change handler
-    document.getElementById('collection-select').addEventListener('change', (e) => {
-      const collectionId = e.target.value;
-      const modeSelect = document.getElementById('mode-select');
-      const createButton = document.getElementById('create-frame-with-mode');
-      
-      if (collectionId) {
-        // Request modes for selected collection
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'get-collection-modes',
-            collectionId: collectionId
-          } 
-        }, '*');
-      } else {
-        modeSelect.innerHTML = '<option value="">Select a mode...</option>';
-        modeSelect.disabled = true;
-        createButton.disabled = true;
-      }
-    });
-
-    // Mode select change handler
-    document.getElementById('mode-select').addEventListener('change', (e) => {
-      const createButton = document.getElementById('create-frame-with-mode');
-      createButton.disabled = !e.target.value;
-    });
-
-    // Create frame with mode functionality
-    document.getElementById('create-frame-with-mode').onclick = () => {
-      const collectionId = document.getElementById('collection-select').value;
-      const modeId = document.getElementById('mode-select').value;
-      
-      parent.postMessage({ 
-        pluginMessage: { 
-          type: 'create-frame-with-mode',
-          collectionId: collectionId,
-          modeId: modeId
-        } 
-      }, '*');
-    };
-
     // Delete confirmation handler
     document.getElementById('delete-confirm').addEventListener('input', (e) => {
       const deleteButton = document.getElementById('delete-collections');
@@ -624,22 +563,6 @@
         `;
         errorMessage.classList.add('show');
         document.getElementById('success-message').classList.remove('show');
-      } else if (message.type === 'frame-created') {
-        console.log('Frame created with ID:', message.frameId);
-      } else if (message.type === 'error') {
-        console.error('Error:', message.error);
-      } else if (message.type === 'collection-modes') {
-        const modeSelect = document.getElementById('mode-select');
-        modeSelect.innerHTML = '<option value="">Select a mode...</option>';
-        
-        message.modes.forEach(mode => {
-          const option = document.createElement('option');
-          option.value = mode.modeId;
-          option.textContent = mode.name;
-          modeSelect.appendChild(option);
-        });
-        
-        modeSelect.disabled = false;
       } else if (message.type === 'delete-success') {
         alert('All collections have been deleted.');
         document.getElementById('delete-confirm').value = '';
