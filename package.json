@@ -1,0 +1,24 @@
+{
+  "name": "figma-variables-inspector-plugin",
+  "version": "1.0.0",
+  "description": "A simple Figma plugin that demonstrates basic plugin functionality.",
+  "main": "dist/code.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "watch": "vite build --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.82.0",
+    "@types/node": "^20.11.19",
+    "terser": "^5.39.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.3"
+  }
+}

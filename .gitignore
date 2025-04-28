@@ -3,7 +3,6 @@ node_modules/
 
 # Build files
 dist/
-build/
 
 # Environment files
 .env
@@ -19,3 +18,4 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+*.log

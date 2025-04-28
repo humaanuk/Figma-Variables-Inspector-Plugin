@@ -1,9 +1,9 @@
 {
-  "name": "Figma Variables Inspector",
-  "id": "figma-variables-inspector",
+  "name": "Variables Inspector",
+  "id": "variables-inspector",
   "api": "1.0.0",
-  "main": "code.js",
-  "ui": "ui.html",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
   "editorType": ["figma"],
   "networkAccess": {
     "allowedDomains": ["none"]
