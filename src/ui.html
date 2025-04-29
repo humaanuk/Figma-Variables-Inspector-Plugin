@@ -465,22 +465,42 @@
     // Download JSON functionality
     document.getElementById('download-json').onclick = () => {
       const jsonData = document.getElementById('export-output').value;
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      
-      // Get the collection name from the data
-      const data = JSON.parse(jsonData);
-      const fileName = data.collections.length === 1 
-        ? `${data.collections[0].name}-variables.json`
-        : 'variables-export.json';
-      
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (!jsonData) {
+        console.error('No data to download');
+        return;
+      }
+
+      try {
+        // Create a blob with the JSON data
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Parse the JSON to get the collection name
+        const data = JSON.parse(jsonData);
+        const fileName = data.collections && data.collections.length === 1 
+          ? `${data.collections[0].name}-variables.json`
+          : 'variables-export.json';
+        
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Error downloading JSON:', e);
+        // If there's an error, try to download with a default filename
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'variables-export.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     };
 
     // Clear export functionality
