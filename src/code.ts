@@ -474,9 +474,18 @@ export function convertVariablesToTemplate(
   modes: Mode[],
   variables: Variable[]
 ): any {
+  // Get all collections to properly handle aliases
+  const allCollections = figma.variables.getLocalVariableCollections();
   const variableMap = new Map<string, Variable>();
-  variables.forEach(variable => {
-    variableMap.set(variable.id, variable);
+  
+  // First, map all variables from all collections to handle aliases properly
+  allCollections.forEach(collection => {
+    collection.variableIds.forEach(id => {
+      const variable = figma.variables.getVariableById(id);
+      if (variable) {
+        variableMap.set(variable.id, variable);
+      }
+    });
   });
 
   // Sort collections to put those with aliases after their referenced collections
@@ -534,7 +543,7 @@ export function convertVariablesToTemplate(
                 const aliasVariable = variableMap.get(modeValue.id);
                 if (aliasVariable) {
                   // Find the collection for the alias variable
-                  const aliasCollection = collections.find(c => 
+                  const aliasCollection = allCollections.find(c => 
                     c.variableIds.includes(aliasVariable.id)
                   );
                   if (aliasCollection) {
@@ -729,7 +738,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       case 'export-variables':
         if (msg.selectedCollections) {
-          const collections = figma.variables.getLocalVariableCollections();
+          const allCollections = figma.variables.getLocalVariableCollections();
+          // Filter collections based on selected IDs
+          const selectedCollectionIds = msg.selectedCollections.map(c => c.id);
+          const collections = allCollections.filter(c => selectedCollectionIds.includes(c.id));
+          
+          // Get modes and variables only from selected collections
           const modes = collections.flatMap(c => c.modes);
           const variables = collections.flatMap(c => 
             c.variableIds.map(id => figma.variables.getVariableById(id))
