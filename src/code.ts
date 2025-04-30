@@ -33,57 +33,43 @@ const templateData: TemplateData = {
   "collections": [
     {
       "name": "Base Colors",
-      "modes": [
+      "modes": ["Light", "Dark"],
+      "variables": [
         {
-          "name": "Light",
-          "variables": [
-            {
-              "name": "Primary Color",
-              "type": "COLOR",
-              "value": "#18A0FB"
-            },
-            {
-              "name": "Secondary Color",
-              "type": "COLOR",
-              "value": "#0D8DE3"
-            },
-            {
-              "name": "Text Size",
-              "type": "FLOAT",
-              "value": 16
-            }
-          ]
+          "name": "Primary Color",
+          "type": "COLOR",
+          "valuesByMode": {
+            "Light": "#18A0FB",
+            "Dark": "#0D8DE3"
+          }
         },
         {
-          "name": "Dark",
-          "variables": [
-            {
-              "name": "Primary Color",
-              "type": "COLOR",
-              "value": "#0D8DE3"
-            },
-            {
-              "name": "Secondary Color",
-              "type": "COLOR",
-              "value": "#18A0FB"
-            },
-            {
-              "name": "Text Size",
-              "type": "FLOAT",
-              "value": 16
-            }
-          ]
+          "name": "Secondary Color",
+          "type": "COLOR",
+          "valuesByMode": {
+            "Light": "#0D8DE3",
+            "Dark": "#18A0FB"
+          }
+        },
+        {
+          "name": "Text Size",
+          "type": "FLOAT",
+          "valuesByMode": {
+            "Light": 16,
+            "Dark": 16
+          }
         }
       ]
     },
     {
       "name": "Alias Tokens",
-      "modes": [
+      "modes": ["Light", "Dark"],
+      "variables": [
         {
-          "name": "Light",
-          "variables": [
-            {
-              "name": "Button Background",
+          "name": "Button Background",
+          "type": "COLOR",
+          "valuesByMode": {
+            "Light": {
               "type": "ALIAS",
               "value": {
                 "collection": "Base Colors",
@@ -91,49 +77,51 @@ const templateData: TemplateData = {
                 "variable": "Primary Color"
               }
             },
-            {
-              "name": "Button Text",
+            "Dark": {
               "type": "ALIAS",
               "value": {
                 "collection": "Base Colors",
-                "mode": "Light",
-                "variable": "Secondary Color"
-              }
-            },
-            {
-              "name": "Button Text Size",
-              "type": "ALIAS",
-              "value": {
-                "collection": "Base Colors",
-                "mode": "Light",
-                "variable": "Text Size"
+                "mode": "Dark",
+                "variable": "Primary Color"
               }
             }
-          ]
+          }
         },
         {
-          "name": "Dark",
-          "variables": [
-            {
-              "name": "Button Background",
+          "name": "Button Text",
+          "type": "COLOR",
+          "valuesByMode": {
+            "Light": {
               "type": "ALIAS",
               "value": {
                 "collection": "Base Colors",
-                "mode": "Dark",
-                "variable": "Primary Color"
+                "mode": "Light",
+                "variable": "Secondary Color"
               }
             },
-            {
-              "name": "Button Text",
+            "Dark": {
               "type": "ALIAS",
               "value": {
                 "collection": "Base Colors",
                 "mode": "Dark",
                 "variable": "Secondary Color"
               }
+            }
+          }
+        },
+        {
+          "name": "Button Text Size",
+          "type": "FLOAT",
+          "valuesByMode": {
+            "Light": {
+              "type": "ALIAS",
+              "value": {
+                "collection": "Base Colors",
+                "mode": "Light",
+                "variable": "Text Size"
+              }
             },
-            {
-              "name": "Button Text Size",
+            "Dark": {
               "type": "ALIAS",
               "value": {
                 "collection": "Base Colors",
@@ -141,72 +129,40 @@ const templateData: TemplateData = {
                 "variable": "Text Size"
               }
             }
-          ]
+          }
         }
       ]
     },
     {
       "name": "Responsive",
-      "modes": [
+      "modes": ["Desktop", "Tablet", "Mobile"],
+      "variables": [
         {
-          "name": "Desktop",
-          "variables": [
-            {
-              "name": "Container Width",
-              "type": "FLOAT",
-              "value": 1200
-            },
-            {
-              "name": "Spacing",
-              "type": "FLOAT",
-              "value": 24
-            },
-            {
-              "name": "Border Radius",
-              "type": "FLOAT",
-              "value": 8
-            }
-          ]
+          "name": "Container Width",
+          "type": "FLOAT",
+          "valuesByMode": {
+            "Desktop": 1200,
+            "Tablet": 768,
+            "Mobile": 375
+          }
         },
         {
-          "name": "Tablet",
-          "variables": [
-            {
-              "name": "Container Width",
-              "type": "FLOAT",
-              "value": 768
-            },
-            {
-              "name": "Spacing",
-              "type": "FLOAT",
-              "value": 16
-            },
-            {
-              "name": "Border Radius",
-              "type": "FLOAT",
-              "value": 6
-            }
-          ]
+          "name": "Spacing",
+          "type": "FLOAT",
+          "valuesByMode": {
+            "Desktop": 24,
+            "Tablet": 16,
+            "Mobile": 12
+          }
         },
         {
-          "name": "Mobile",
-          "variables": [
-            {
-              "name": "Container Width",
-              "type": "FLOAT",
-              "value": 375
-            },
-            {
-              "name": "Spacing",
-              "type": "FLOAT",
-              "value": 12
-            },
-            {
-              "name": "Border Radius",
-              "type": "FLOAT",
-              "value": 4
-            }
-          ]
+          "name": "Border Radius",
+          "type": "FLOAT",
+          "valuesByMode": {
+            "Desktop": 8,
+            "Tablet": 6,
+            "Mobile": 4
+          }
         }
       ]
     }
@@ -474,9 +430,18 @@ export function convertVariablesToTemplate(
   modes: Mode[],
   variables: Variable[]
 ): any {
+  // Get all collections to properly handle aliases
+  const allCollections = figma.variables.getLocalVariableCollections();
   const variableMap = new Map<string, Variable>();
-  variables.forEach(variable => {
-    variableMap.set(variable.id, variable);
+  
+  // First, map all variables from all collections to handle aliases properly
+  allCollections.forEach(collection => {
+    collection.variableIds.forEach(id => {
+      const variable = figma.variables.getVariableById(id);
+      if (variable) {
+        variableMap.set(variable.id, variable);
+      }
+    });
   });
 
   // Sort collections to put those with aliases after their referenced collections
@@ -534,7 +499,7 @@ export function convertVariablesToTemplate(
                 const aliasVariable = variableMap.get(modeValue.id);
                 if (aliasVariable) {
                   // Find the collection for the alias variable
-                  const aliasCollection = collections.find(c => 
+                  const aliasCollection = allCollections.find(c => 
                     c.variableIds.includes(aliasVariable.id)
                   );
                   if (aliasCollection) {
@@ -729,7 +694,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       case 'export-variables':
         if (msg.selectedCollections) {
-          const collections = figma.variables.getLocalVariableCollections();
+          const allCollections = figma.variables.getLocalVariableCollections();
+          // Filter collections based on selected IDs
+          const selectedCollectionIds = msg.selectedCollections.map(c => c.id);
+          const collections = allCollections.filter(c => selectedCollectionIds.includes(c.id));
+          
+          // Get modes and variables only from selected collections
           const modes = collections.flatMap(c => c.modes);
           const variables = collections.flatMap(c => 
             c.variableIds.map(id => figma.variables.getVariableById(id))

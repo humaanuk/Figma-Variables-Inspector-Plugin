@@ -304,11 +304,7 @@
     <div class="delete-section">
       <h3>Delete All Collections</h3>
       <p class="warning-text">Warning: This action cannot be undone. All variable collections will be permanently deleted.</p>
-      <div class="select-group">
-        <label for="delete-confirm">Type DELETE to confirm:</label>
-        <input type="text" id="delete-confirm" class="select-input" placeholder="Type DELETE to confirm">
-      </div>
-      <button id="delete-collections" class="danger" disabled>Delete All Collections</button>
+      <button id="delete-collections" class="danger" onclick="if(confirm('Are you sure you want to delete all collections? This action cannot be undone.')) { parent.postMessage({ pluginMessage: { type: 'delete-collections' } }, '*'); }">Delete All Collections</button>
     </div>
   </div>
 
@@ -465,22 +461,42 @@
     // Download JSON functionality
     document.getElementById('download-json').onclick = () => {
       const jsonData = document.getElementById('export-output').value;
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      
-      // Get the collection name from the data
-      const data = JSON.parse(jsonData);
-      const fileName = data.collections.length === 1 
-        ? `${data.collections[0].name}-variables.json`
-        : 'variables-export.json';
-      
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (!jsonData) {
+        console.error('No data to download');
+        return;
+      }
+
+      try {
+        // Create a blob with the JSON data
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Parse the JSON to get the collection name
+        const data = JSON.parse(jsonData);
+        const fileName = data.collections && data.collections.length === 1 
+          ? `${data.collections[0].name}-variables.json`
+          : 'variables-export.json';
+        
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Error downloading JSON:', e);
+        // If there's an error, try to download with a default filename
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'variables-export.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     };
 
     // Clear export functionality
@@ -492,23 +508,6 @@
     // Initial load
     document.getElementById('refresh').onclick = () => {
       parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
-    };
-
-    // Delete confirmation handler
-    document.getElementById('delete-confirm').addEventListener('input', (e) => {
-      const deleteButton = document.getElementById('delete-collections');
-      deleteButton.disabled = e.target.value !== 'DELETE';
-    });
-
-    // Delete collections functionality
-    document.getElementById('delete-collections').onclick = () => {
-      if (confirm('Are you sure you want to delete all collections? This action cannot be undone.')) {
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'delete-collections'
-          } 
-        }, '*');
-      }
     };
 
     // Listen for messages from the plugin

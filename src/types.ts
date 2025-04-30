@@ -94,9 +94,11 @@ export interface RGBAValue extends RGBValue {
 
 export interface VariableData {
   name: string;
-  type?: VariableResolvedDataType | 'ALIAS';
+  type: VariableResolvedDataType | 'ALIAS';
   value?: any;
   description?: string;
+  scopes?: string[];
+  valuesByMode?: { [modeName: string]: any };
 }
 
 export interface ModeData {
@@ -106,7 +108,8 @@ export interface ModeData {
 
 export interface CollectionData {
   name: string;
-  modes: ModeData[];
+  modes: string[];
+  variables: VariableData[];
 }
 
 export interface TemplateData {

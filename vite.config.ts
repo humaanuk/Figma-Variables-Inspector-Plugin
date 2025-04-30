@@ -17,6 +17,10 @@ export default defineConfig({
         esModule: false,
         inlineDynamicImports: true
       }
+    },
+    watch: {
+      include: ['src/**/*'],
+      exclude: ['node_modules/**']
     }
   },
   plugins: [{
