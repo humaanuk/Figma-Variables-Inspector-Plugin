@@ -16,7 +16,6 @@ import {
   PluginMessage,
   VariableValue,
   VariableResolvedDataType, 
-  VariableAlias, 
   RGBValue, 
   ModeMap
 } from './types';
@@ -27,6 +26,21 @@ interface ModeDataWithId extends ModeData {
 }
 
 figma.showUI(__html__, { width: 400, height: 600 });
+
+// Initial load of collections
+(async () => {
+  try {
+    const collections = await getAllVariableCollections();
+    console.log('Initial collections loaded:', collections);
+    figma.ui.postMessage({ type: 'collections', collections });
+  } catch (error) {
+    console.error('Error loading initial collections:', error);
+    figma.ui.postMessage({ 
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to load collections'
+    });
+  }
+})();
 
 // Template data
 const templateData: TemplateData = {
@@ -170,27 +184,30 @@ const templateData: TemplateData = {
 };
 
 // Function to get all variable collections
-function getAllVariableCollections(): Collection[] {
-  return figma.variables.getLocalVariableCollections().map(collection => ({
+async function getAllVariableCollections(): Promise<Collection[]> {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const collectionsWithVariables = await Promise.all(collections.map(async collection => ({
     id: collection.id,
     name: collection.name,
     variableCount: collection.variableIds.length,
-    variables: collection.variableIds
-      .map(id => figma.variables.getVariableById(id))
-      .filter((v): v is Variable => v !== null)
-  }));
+    variables: await Promise.all(
+      collection.variableIds.map(id => figma.variables.getVariableByIdAsync(id))
+    ).then(vars => vars.filter((v): v is Variable => v !== null))
+  })));
+  return collectionsWithVariables;
 }
 
 // Function to find a variable by name in a collection
-function findVariableInCollection(collection: VariableCollection, variableName: string): Variable | null {
-  return collection.variableIds
-    .map(id => figma.variables.getVariableById(id))
-    .find(v => v?.name === variableName) || null;
+async function findVariableInCollection(collection: VariableCollection, variableName: string): Promise<Variable | null> {
+  const variables = await Promise.all(
+    collection.variableIds.map(id => figma.variables.getVariableByIdAsync(id))
+  );
+  return variables.find(v => v?.name === variableName) || null;
 }
 
 // Function to check if a collection exists
-function collectionExists(name: string): boolean {
-  const collections = figma.variables.getLocalVariableCollections();
+async function collectionExists(name: string): Promise<boolean> {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
   return collections.some(collection => collection.name === name);
 }
 
@@ -225,17 +242,17 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
     console.log('Sorted collections:', sortedCollections.map(c => c.name));
 
     // Create collections and their modes first
-    const collections: CollectionsMap = {};
-    const modeMap: CollectionModesMap = {};
+    const collections: CollectionsMap = new Map();
+    const modeMap: CollectionModesMap = new Map();
     let totalVariables = 0;
 
     // First, get all existing collections
-    const existingCollections = figma.variables.getLocalVariableCollections();
+    const existingCollections = await figma.variables.getLocalVariableCollectionsAsync();
     for (const collection of existingCollections) {
-      collections[collection.name] = collection;
-      modeMap[collection.name] = {};
+      collections.set(collection.name, collection);
+      modeMap.set(collection.name, new Map());
       for (const mode of collection.modes) {
-        modeMap[collection.name][mode.name] = mode.modeId;
+        modeMap.get(collection.name)?.set(mode.name, mode.modeId);
       }
     }
 
@@ -243,34 +260,37 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
     for (const collectionData of sortedCollections) {
       console.log(`Creating collection: ${collectionData.name}`);
       // Create or get collection
-      if (!collections[collectionData.name]) {
-        collections[collectionData.name] = figma.variables.createVariableCollection(collectionData.name);
-        modeMap[collectionData.name] = {};
+      if (!collections.has(collectionData.name)) {
+        const newCollection = figma.variables.createVariableCollection(collectionData.name);
+        collections.set(collectionData.name, newCollection);
+        modeMap.set(collectionData.name, new Map());
 
         // Get the default mode (Mode 1)
-        const defaultMode = collections[collectionData.name].modes.find(m => m.name === 'Mode 1');
+        const defaultMode = newCollection.modes.find(m => m.name === 'Mode 1');
         if (defaultMode) {
           // If the first mode in our data is not "Mode 1", rename the default mode
           if (collectionData.modes[0] !== 'Mode 1') {
-            collections[collectionData.name].renameMode(defaultMode.modeId, collectionData.modes[0]);
-            modeMap[collectionData.name][collectionData.modes[0]] = defaultMode.modeId;
+            newCollection.renameMode(defaultMode.modeId, collectionData.modes[0]);
+            modeMap.get(collectionData.name)?.set(collectionData.modes[0], defaultMode.modeId);
           } else {
-            modeMap[collectionData.name]['Mode 1'] = defaultMode.modeId;
+            modeMap.get(collectionData.name)?.set('Mode 1', defaultMode.modeId);
           }
         }
 
         // Create additional modes if needed
         for (const modeName of collectionData.modes.slice(1)) {
-          const modeId = collections[collectionData.name].addMode(modeName);
-          modeMap[collectionData.name][modeName] = modeId;
+          const modeId = newCollection.addMode(modeName);
+          modeMap.get(collectionData.name)?.set(modeName, modeId);
         }
       } else {
         // For existing collections, ensure all modes exist
-        const collection = collections[collectionData.name];
-        for (const modeName of collectionData.modes) {
-          if (!modeMap[collectionData.name][modeName]) {
-            const modeId = collection.addMode(modeName);
-            modeMap[collectionData.name][modeName] = modeId;
+        const collection = collections.get(collectionData.name);
+        if (collection) {
+          for (const modeName of collectionData.modes) {
+            if (!modeMap.get(collectionData.name)?.has(modeName)) {
+              const modeId = collection.addMode(modeName);
+              modeMap.get(collectionData.name)?.set(modeName, modeId);
+            }
           }
         }
       }
@@ -278,7 +298,9 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
 
     // Second pass: Create all non-alias variables and set their values
     for (const collectionData of sortedCollections) {
-      const collection = collections[collectionData.name];
+      const collection = collections.get(collectionData.name);
+      if (!collection) continue;
+
       console.log(`Processing non-alias variables for collection: ${collectionData.name}`);
 
       // Create variables
@@ -287,7 +309,7 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
         if (variableData.type === 'ALIAS') continue;
 
         console.log(`Creating non-alias variable: ${variableData.name}`);
-        let variable = findVariableInCollection(collection, variableData.name);
+        let variable = await findVariableInCollection(collection, variableData.name);
 
         if (!variable) {
           variable = figma.variables.createVariable(
@@ -298,48 +320,48 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
           totalVariables++;
         }
 
-        // Set scopes if provided
-        if (variableData.scopes) {
-          variable.scopes = variableData.scopes as VariableScope[];
-        }
+        if (variable) {
+          // Set scopes if provided
+          if (variableData.scopes) {
+            variable.scopes = variableData.scopes;
+          }
 
-        // Set values for each mode
-        if (variableData.valuesByMode) {
-          for (const [modeName, value] of Object.entries(variableData.valuesByMode)) {
-            const modeId = modeMap[collectionData.name][modeName];
-            if (modeId) {
-              if (typeof value === 'string' && value.startsWith('#')) {
-                // Convert hex to RGB
-                const r = parseInt(value.slice(1, 3), 16) / 255;
-                const g = parseInt(value.slice(3, 5), 16) / 255;
-                const b = parseInt(value.slice(5, 7), 16) / 255;
-                variable.setValueForMode(modeId, { r, g, b });
-              } else if (typeof value === 'number') {
-                // Handle number values
-                variable.setValueForMode(modeId, value);
-              } else if (typeof value === 'object' && value !== null) {
-                if ('type' in value && value.type === 'ALIAS') {
-                  // Handle alias values
-                  const aliasValue = value as { type: 'ALIAS'; value: { collection: string; variable: string } };
-                  const targetCollection = collections[aliasValue.value.collection];
-                  if (targetCollection) {
-                    const targetVariable = findVariableInCollection(targetCollection, aliasValue.value.variable);
-                    if (targetVariable) {
-                      // Create a proper variable alias reference using Figma's API format
-                      const aliasRef: VariableAlias = {
-                        type: 'VARIABLE_ALIAS',
-                        id: targetVariable.id
-                      };
-                      variable.setValueForMode(modeId, aliasRef);
+          // Set values for each mode
+          if (variableData.valuesByMode) {
+            for (const [modeName, value] of Object.entries(variableData.valuesByMode)) {
+              const modeId = modeMap.get(collectionData.name)?.get(modeName);
+              if (modeId) {
+                if (typeof value === 'string' && value.startsWith('#')) {
+                  // Convert hex to RGB
+                  const r = parseInt(value.slice(1, 3), 16) / 255;
+                  const g = parseInt(value.slice(3, 5), 16) / 255;
+                  const b = parseInt(value.slice(5, 7), 16) / 255;
+                  variable.setValueForMode(modeId, { r, g, b });
+                } else if (typeof value === 'number') {
+                  // Handle number values
+                  variable.setValueForMode(modeId, value);
+                } else if (typeof value === 'object' && value !== null) {
+                  if ('type' in value && value.type === 'ALIAS') {
+                    // Handle alias values
+                    const aliasValue = value as AliasValue;
+                    const targetCollection = collections.get(aliasValue.value.collection);
+                    if (targetCollection) {
+                      const targetVariable = await findVariableInCollection(targetCollection, aliasValue.value.variable);
+                      if (targetVariable) {
+                        variable.setValueForMode(modeId, {
+                          type: 'VARIABLE_ALIAS',
+                          id: targetVariable.id
+                        });
+                      }
                     }
+                  } else {
+                    // Handle other object values
+                    variable.setValueForMode(modeId, value);
                   }
                 } else {
-                  // Handle other object values
+                  // Handle primitive values
                   variable.setValueForMode(modeId, value);
                 }
-              } else {
-                // Handle primitive values
-                variable.setValueForMode(modeId, value);
               }
             }
           }
@@ -349,7 +371,9 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
 
     // Third pass: Create alias variables only after all non-alias variables exist
     for (const collectionData of sortedCollections) {
-      const collection = collections[collectionData.name];
+      const collection = collections.get(collectionData.name);
+      if (!collection) continue;
+
       console.log(`Processing alias variables for collection: ${collectionData.name}`);
 
       // Create variables
@@ -358,7 +382,7 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
         if (variableData.type !== 'ALIAS') continue;
 
         console.log(`Creating alias variable: ${variableData.name}`);
-        let variable = findVariableInCollection(collection, variableData.name);
+        let variable = await findVariableInCollection(collection, variableData.name);
 
         if (!variable) {
           variable = figma.variables.createVariable(
@@ -369,37 +393,36 @@ async function createVariablesFromJSON(jsonData: string): Promise<{ success: boo
           totalVariables++;
         }
 
-        // Set scopes if provided
-        if (variableData.scopes) {
-          variable.scopes = variableData.scopes as VariableScope[];
-        }
+        if (variable) {
+          // Set scopes if provided
+          if (variableData.scopes) {
+            variable.scopes = variableData.scopes;
+          }
 
-        // Set values for each mode
-        if (variableData.valuesByMode) {
-          for (const [modeName, value] of Object.entries(variableData.valuesByMode)) {
-            const modeId = modeMap[collectionData.name][modeName];
-            if (modeId && typeof value === 'object' && value !== null && 'type' in value && value.type === 'ALIAS') {
-              const aliasValue = value as { type: 'ALIAS'; value: { collection: string; variable: string } };
-              console.log(`Looking for target collection: ${aliasValue.value.collection}`);
-              const targetCollection = collections[aliasValue.value.collection];
-              if (targetCollection) {
-                console.log(`Found target collection: ${targetCollection.name}`);
-                console.log(`Looking for target variable: ${aliasValue.value.variable}`);
-                const targetVariable = findVariableInCollection(targetCollection, aliasValue.value.variable);
-                if (targetVariable) {
-                  console.log(`Found target variable: ${targetVariable.name} (${targetVariable.id})`);
-                  // Create a proper variable alias reference using Figma's API format
-                  const aliasRef: VariableAlias = {
-                    type: 'VARIABLE_ALIAS',
-                    id: targetVariable.id
-                  };
-                  console.log(`Setting alias reference:`, aliasRef);
-                  variable.setValueForMode(modeId, aliasRef);
+          // Set values for each mode
+          if (variableData.valuesByMode) {
+            for (const [modeName, value] of Object.entries(variableData.valuesByMode)) {
+              const modeId = modeMap.get(collectionData.name)?.get(modeName);
+              if (modeId && typeof value === 'object' && value !== null && 'type' in value && value.type === 'ALIAS') {
+                const aliasValue = value as AliasValue;
+                console.log(`Looking for target collection: ${aliasValue.value.collection}`);
+                const targetCollection = collections.get(aliasValue.value.collection);
+                if (targetCollection) {
+                  console.log(`Found target collection: ${targetCollection.name}`);
+                  console.log(`Looking for target variable: ${aliasValue.value.variable}`);
+                  const targetVariable = await findVariableInCollection(targetCollection, aliasValue.value.variable);
+                  if (targetVariable) {
+                    console.log(`Found target variable: ${targetVariable.name} (${targetVariable.id})`);
+                    variable.setValueForMode(modeId, {
+                      type: 'VARIABLE_ALIAS',
+                      id: targetVariable.id
+                    });
+                  } else {
+                    console.warn(`Target variable ${aliasValue.value.variable} not found in collection ${aliasValue.value.collection}`);
+                  }
                 } else {
-                  console.warn(`Target variable ${aliasValue.value.variable} not found in collection ${aliasValue.value.collection}`);
+                  console.warn(`Target collection ${aliasValue.value.collection} not found for alias`);
                 }
-              } else {
-                console.warn(`Target collection ${aliasValue.value.collection} not found for alias`);
               }
             }
           }
@@ -425,120 +448,90 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 // Function to convert variables to template format
-export function convertVariablesToTemplate(
+async function convertVariablesToTemplate(
   collections: VariableCollection[],
-  modes: Mode[],
-  variables: Variable[]
-): any {
+  modes: { name: string; modeId: string }[],
+  variables: Variable[],
+  useHexRef: boolean = true
+): Promise<TemplateData> {
   // Get all collections to properly handle aliases
-  const allCollections = figma.variables.getLocalVariableCollections();
+  const allCollections = await figma.variables.getLocalVariableCollectionsAsync();
   const variableMap = new Map<string, Variable>();
   
-  // First, map all variables from all collections to handle aliases properly
-  allCollections.forEach(collection => {
-    collection.variableIds.forEach(id => {
-      const variable = figma.variables.getVariableById(id);
-      if (variable) {
-        variableMap.set(variable.id, variable);
-      }
-    });
-  });
+  // First, map all variables for alias resolution
+  for (const variable of variables) {
+    variableMap.set(variable.id, variable);
+  }
 
-  // Sort collections to put those with aliases after their referenced collections
+  // Sort collections to ensure aliases are processed after their referenced collections
   const sortedCollections = [...collections].sort((a, b) => {
-    const aVariables = variables.filter(v => v.variableCollectionId === a.id);
-    const bVariables = variables.filter(v => v.variableCollectionId === b.id);
-    
-    const aHasAliases = aVariables.some(v => 
-      Object.values(v.valuesByMode).some(modeValue => 
-        typeof modeValue === 'object' && modeValue !== null && 'type' in modeValue && modeValue.type === 'VARIABLE_ALIAS'
-      )
+    const aHasAliases = variables.some(v => 
+      v.variableCollectionId === a.id && 
+      (Object.values(v.valuesByMode).some(value => 
+        typeof value === 'object' && value !== null && 'type' in value && value.type === 'VARIABLE_ALIAS'
+      ))
     );
-    const bHasAliases = bVariables.some(v => 
-      Object.values(v.valuesByMode).some(modeValue => 
-        typeof modeValue === 'object' && modeValue !== null && 'type' in modeValue && modeValue.type === 'VARIABLE_ALIAS'
-      )
+    const bHasAliases = variables.some(v => 
+      v.variableCollectionId === b.id && 
+      (Object.values(v.valuesByMode).some(value => 
+        typeof value === 'object' && value !== null && 'type' in value && value.type === 'VARIABLE_ALIAS'
+      ))
     );
-
     if (aHasAliases && !bHasAliases) return 1;
     if (!aHasAliases && bHasAliases) return -1;
     return 0;
   });
 
-  const processedCollections = sortedCollections.map(collection => {
-    const processedModes = modes
-      .filter(mode => collection.modes.some(m => m.modeId === mode.modeId))
-      .map(mode => ({
-        modeId: mode.modeId,
-        name: mode.name
-      }));
-
-    const processedVariables = variables
-      .filter(variable => variable.variableCollectionId === collection.id)
-      .map(variable => {
-        const variableData: {
-          name: string;
-          type: string;
-          description?: string;
-          scopes?: string[];
-          valuesByMode: { [key: string]: any };
-        } = {
-          name: variable.name,
-          type: variable.resolvedType,
-          description: variable.description || undefined,
-          scopes: variable.scopes,
-          valuesByMode: {}
-        };
-
-        // Process values for each mode
-        processedModes.forEach(mode => {
-          const modeValue = variable.valuesByMode[mode.modeId];
-          if (modeValue !== undefined) {
-            if (typeof modeValue === 'object' && modeValue !== null) {
-              if ('type' in modeValue && modeValue.type === 'VARIABLE_ALIAS') {
-                const aliasVariable = variableMap.get(modeValue.id);
+  return {
+    collections: sortedCollections.map(collection => {
+      const collectionVariables = variables.filter(v => v.variableCollectionId === collection.id);
+      return {
+        name: collection.name,
+        modes: collection.modes.map(m => m.name),
+        variables: collectionVariables.map(variable => {
+          const valuesByMode: Record<string, any> = {};
+          
+          // Process each mode's value
+          for (const [modeId, value] of Object.entries(variable.valuesByMode)) {
+            const mode = collection.modes.find(m => m.modeId === modeId);
+            if (mode) {
+              if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'VARIABLE_ALIAS') {
+                // Handle alias values
+                const aliasVariable = variableMap.get(value.id);
                 if (aliasVariable) {
-                  // Find the collection for the alias variable
-                  const aliasCollection = allCollections.find(c => 
-                    c.variableIds.includes(aliasVariable.id)
-                  );
+                  const aliasCollection = allCollections.find(c => c.id === aliasVariable.variableCollectionId);
                   if (aliasCollection) {
-                    variableData.valuesByMode[mode.name] = {
+                    // Get the mode name from the alias collection
+                    const aliasMode = aliasCollection.modes.find(m => m.modeId === modeId);
+                    valuesByMode[mode.name] = {
                       type: 'ALIAS',
                       value: {
                         collection: aliasCollection.name,
-                        mode: mode.name,
+                        mode: aliasMode?.name || mode.name,
                         variable: aliasVariable.name
                       }
                     };
                   }
                 }
-              } else if ('r' in modeValue && 'g' in modeValue && 'b' in modeValue) {
-                variableData.valuesByMode[mode.name] = rgbToHex(
-                  modeValue.r,
-                  modeValue.g,
-                  modeValue.b
-                );
+              } else if (useHexRef && typeof value === 'object' && value !== null && 'r' in value && 'g' in value && 'b' in value) {
+                // Convert RGB to hex if hexref is enabled
+                valuesByMode[mode.name] = rgbToHex(value.r, value.g, value.b);
               } else {
-                variableData.valuesByMode[mode.name] = modeValue;
+                // Handle regular values
+                valuesByMode[mode.name] = value;
               }
-            } else {
-              variableData.valuesByMode[mode.name] = modeValue;
             }
           }
-        });
 
-        return variableData;
-      });
-
-    return {
-      name: collection.name,
-      modes: processedModes.map(mode => mode.name),
-      variables: processedVariables
-    };
-  });
-
-  return { collections: processedCollections };
+          return {
+            name: variable.name,
+            type: variable.resolvedType,
+            valuesByMode
+          };
+        })
+      };
+    })
+  };
 }
 
 // Function to get modes for a collection
@@ -628,7 +621,7 @@ async function createFrameWithVariableMode(collectionId: string, modeId: string)
 // Function to delete all collections
 async function deleteAllCollections(): Promise<boolean> {
   try {
-    const collections = figma.variables.getLocalVariableCollections();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
     for (const collection of collections) {
       collection.remove();
     }
@@ -662,7 +655,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   try {
     switch (msg.type) {
       case 'get-collections':
-        const collections = getAllVariableCollections();
+        console.log('Fetching collections...');
+        const collections = await getAllVariableCollections();
+        console.log('Collections fetched:', collections);
         figma.ui.postMessage({ type: 'collections', collections });
         break;
 
@@ -694,21 +689,26 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       case 'export-variables':
         if (msg.selectedCollections) {
-          const allCollections = figma.variables.getLocalVariableCollections();
+          const allCollections = await figma.variables.getLocalVariableCollectionsAsync();
           // Filter collections based on selected IDs
           const selectedCollectionIds = msg.selectedCollections.map(c => c.id);
           const collections = allCollections.filter(c => selectedCollectionIds.includes(c.id));
           
+          // Get all variables from all collections to properly handle aliases
+          const allVariables = await Promise.all(
+            allCollections.flatMap(c => c.variableIds)
+              .map(id => figma.variables.getVariableByIdAsync(id))
+          ).then(vars => vars.filter((v): v is Variable => v !== null));
+          
           // Get modes and variables only from selected collections
           const modes = collections.flatMap(c => c.modes);
-          const variables = collections.flatMap(c => 
-            c.variableIds.map(id => figma.variables.getVariableById(id))
-          ).filter((v): v is Variable => v !== null);
+          const variables = allVariables.filter(v => selectedCollectionIds.includes(v.variableCollectionId));
           
-          const template = convertVariablesToTemplate(
+          const template = await convertVariablesToTemplate(
             collections,
             modes,
-            variables
+            allVariables, // Pass all variables to handle aliases properly
+            msg.useHexRef // Pass the hexref option
           );
           figma.ui.postMessage({ 
             type: 'export-data',

@@ -244,6 +244,40 @@
       background-color: #ffccc7;
       cursor: not-allowed;
     }
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #export-result {
+      margin-top: 16px;
+    }
+    #export-output {
+      background-color: #f5f5f5;
+    }
+    .export-controls {
+      margin-top:16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      /* margin-bottom: 20px; */
+      background-color: #E8F4FD;
+      border-radius:8px;
+      padding:8px;
+    }
+    .export-controls button {
+      align-self:center;
+    margin-bottom:0;
+    }
+    .checkbox-container {
+      display: flex;
+      align-self: center;
+      gap: 8px;
+      
+    }
+    .checkbox-container label {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -257,23 +291,25 @@
 
   <div id="export-tab" class="tab-content active">
     <button id="refresh">Refresh Collections</button>
-    <button id="export-variables" disabled>Export Variables</button>
+    
     <div id="collections-container">
       <ul class="collection-list" id="collections-list"></ul>
     </div>
+    <div class="export-controls">
+      <div class="checkbox-container">
+        <input type="checkbox" id="hexref" checked>
+        <label for="hexref">Export Hexref colors</label>
+      </div>
+      <button id="export-variables" disabled>Export Variables</button>
+    </div>
     <div id="export-container" style="display: none; margin-top: 20px;">
-      <h3>Exported Variables</h3>
-      <textarea id="export-output" class="json-input" readonly></textarea>
-      <div style="display: flex; gap: 10px;">
-        <button id="download-json">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px; vertical-align: middle;">
-            <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M11.3333 5.33333L8 8.66667L4.66667 5.33333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M8 8.66667V2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Download JSON
-        </button>
-        <button id="clear-export" class="secondary">Clear</button>
+      <h3>Export Result</h3>
+      <div id="export-result">
+        <textarea id="export-output" class="json-input" readonly></textarea>
+        <div class="button-group">
+          <button id="download-json">Download JSON</button>
+          <button id="clear-export" class="secondary">Clear</button>
+        </div>
       </div>
     </div>
   </div>
@@ -328,11 +364,12 @@
 
     // Function to display collections
     function displayCollections(collections) {
+      console.log('Displaying collections:', collections);
       const list = document.getElementById('collections-list');
       const exportButton = document.getElementById('export-variables');
       list.innerHTML = '';
       
-      if (collections.length === 0) {
+      if (!collections || collections.length === 0) {
         list.innerHTML = '<li class="no-collections">No variable collections found</li>';
         exportButton.disabled = true;
         return;
@@ -443,83 +480,90 @@
 
     // Export variables functionality
     document.getElementById('export-variables').onclick = () => {
-      const selectedCheckboxes = document.querySelectorAll('.collection-checkbox:checked');
-      const selectedCollections = Array.from(selectedCheckboxes).map(checkbox => ({
-        id: checkbox.dataset.id,
-        name: checkbox.closest('.collection-item').querySelector('.collection-name-text').textContent.trim()
-      }));
-      
-      console.log('Exporting selected collections:', selectedCollections);
-      parent.postMessage({ 
-        pluginMessage: { 
-          type: 'export-variables',
-          selectedCollections: selectedCollections
-        } 
-      }, '*');
-    };
+      const selectedCollections = Array.from(document.querySelectorAll('.collection-checkbox:checked'))
+        .map(checkbox => ({
+          id: checkbox.dataset.id,
+          name: checkbox.parentElement.querySelector('.collection-name-text').textContent
+        }));
 
-    // Download JSON functionality
-    document.getElementById('download-json').onclick = () => {
-      const jsonData = document.getElementById('export-output').value;
-      if (!jsonData) {
-        console.error('No data to download');
+      if (selectedCollections.length === 0) {
+        showError('Please select at least one collection to export');
         return;
       }
 
-      try {
-        // Create a blob with the JSON data
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Parse the JSON to get the collection name
-        const data = JSON.parse(jsonData);
-        const fileName = data.collections && data.collections.length === 1 
-          ? `${data.collections[0].name}-variables.json`
-          : 'variables-export.json';
-        
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        console.error('Error downloading JSON:', e);
-        // If there's an error, try to download with a default filename
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'variables-export.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    };
-
-    // Clear export functionality
-    document.getElementById('clear-export').onclick = () => {
-      document.getElementById('export-output').value = '';
-      document.getElementById('export-container').style.display = 'none';
+      const useHexRef = document.getElementById('hexref').checked;
+      parent.postMessage({ 
+        pluginMessage: { 
+          type: 'export-variables',
+          selectedCollections,
+          useHexRef
+        }
+      }, '*');
     };
 
     // Initial load
     document.getElementById('refresh').onclick = () => {
+      console.log('Refreshing collections...');
       parent.postMessage({ pluginMessage: { type: 'get-collections' } }, '*');
     };
 
     // Listen for messages from the plugin
     window.onmessage = (event) => {
       const message = event.data.pluginMessage;
+      console.log('Received message from plugin:', message);
+      
       if (message.type === 'collections') {
+        console.log('Displaying collections:', message.collections);
         displayCollections(message.collections);
       } else if (message.type === 'export-data') {
         const exportContainer = document.getElementById('export-container');
         const exportOutput = document.getElementById('export-output');
         exportOutput.value = message.data;
         exportContainer.style.display = 'block';
+
+        // Set up download and clear buttons
+        document.getElementById('download-json').onclick = () => {
+          const jsonData = exportOutput.value;
+          if (!jsonData) {
+            console.error('No data to download');
+            return;
+          }
+
+          try {
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Parse the JSON to get the collection name
+            const data = JSON.parse(jsonData);
+            const fileName = data.collections && data.collections.length === 1 
+              ? `${data.collections[0].name}-variables.json`
+              : 'variables-export.json';
+            
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error('Error downloading JSON:', e);
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'variables-export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }
+        };
+
+        document.getElementById('clear-export').onclick = () => {
+          exportOutput.value = '';
+          exportContainer.style.display = 'none';
+        };
       } else if (message.type === 'template-data') {
         // Create a blob and download the template
         const blob = new Blob([message.data], { type: 'application/json' });

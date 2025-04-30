@@ -11,31 +11,47 @@ export interface Collection {
 }
 
 export interface Mode {
-  modeId: string;
   name: string;
+  modeId: string;
 }
 
-export interface VariableCodeSyntax {
-  WEB?: string;
-  ANDROID?: string;
-  iOS?: string;
+export interface VariableData {
+  name: string;
+  type: VariableResolvedDataType | 'ALIAS';
+  description?: string;
+  scopes?: VariableScope[];
+  valuesByMode: { [key: string]: any };
 }
 
-export interface VariableValue {
-  type: string;
-  value?: any;
-  id?: string;
+export interface CollectionData {
+  name: string;
+  modes: string[];
+  variables: VariableData[];
 }
 
-export interface VariableAlias {
-  type: 'VARIABLE_ALIAS';
-  id: string;
+export interface TemplateData {
+  collections: CollectionData[];
 }
+
+export interface AliasValue {
+  type: 'ALIAS';
+  value: {
+    collection: string;
+    variable: string;
+  };
+}
+
+export type VariableValue = string | number | RGB | RGBA | AliasValue;
+
+export type VariableMap = Map<string, Variable>;
+
+export type CollectionsMap = Map<string, VariableCollection>;
+
+export type CollectionModesMap = Map<string, Map<string, string>>;
 
 export interface SelectedCollection {
   id: string;
   name: string;
-  selected: boolean;
 }
 
 export interface PluginMessage {
@@ -46,20 +62,12 @@ export interface PluginMessage {
   collectionId?: string;
   modeId?: string;
   data?: string;
+  useHexRef?: boolean;
 }
 
 // Re-export Figma types we use
 export type VariableResolvedDataType = 'BOOLEAN' | 'COLOR' | 'FLOAT' | 'STRING';
 export type VariableScope = 'ALL_SCOPES' | 'TEXT_CONTENT' | 'CORNER_RADIUS' | 'WIDTH_HEIGHT' | 'GAP';
-
-export interface VariableMap {
-  [collectionName: string]: {
-    [variableName: string]: {
-      collection: VariableCollection;
-      variable: Variable | null;
-    };
-  };
-}
 
 export interface ModeMap {
   [collectionName: string]: {
@@ -74,14 +82,6 @@ export interface ColorValue {
   a?: number;
 }
 
-export interface AliasValue {
-  type: 'VARIABLE_ALIAS';
-  id: string;
-  collection?: string;
-  mode?: string;
-  variable?: string;
-}
-
 export interface RGBValue {
   r: number;
   g: number;
@@ -92,13 +92,9 @@ export interface RGBAValue extends RGBValue {
   a: number;
 }
 
-export interface VariableData {
+export interface ModeData {
   name: string;
-  type: VariableResolvedDataType | 'ALIAS';
-  value?: any;
-  description?: string;
-  scopes?: string[];
-  valuesByMode?: { [modeName: string]: any };
+  variables: VariableData[];
 }
 
 export interface ModeData {
@@ -106,22 +102,12 @@ export interface ModeData {
   variables: VariableData[];
 }
 
-export interface CollectionData {
+export interface ModeData {
   name: string;
-  modes: string[];
   variables: VariableData[];
 }
 
-export interface TemplateData {
-  collections: CollectionData[];
-}
-
-export interface CollectionsMap {
-  [key: string]: VariableCollection;
-}
-
-export interface CollectionModesMap {
-  [key: string]: {
-    [key: string]: string;
-  };
+export interface ModeData {
+  name: string;
+  variables: VariableData[];
 } 
