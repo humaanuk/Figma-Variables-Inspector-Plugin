@@ -1,6 +1,6 @@
 {
   "name": "Variables Inspector",
-  "id": "variables-inspector",
+  "id": "1499424962924433062",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
