@@ -7,15 +7,5 @@
   "editorType": ["figma"],
   "networkAccess": {
     "allowedDomains": ["none"]
-  },
-  "permissions": ["currentuser"],
-  "menu": [
-    {
-      "name": "Variables Inspector",
-      "command": "open-plugin"
-    }
-  ],
-  "description": "A plugin to inspect, export, and import Figma variables with support for collections, modes, and aliases.",
-  "author": "Your Name",
-  "version": "1.0.0"
+  }
 } 
